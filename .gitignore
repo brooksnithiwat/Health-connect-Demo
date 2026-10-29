@@ -2,6 +2,9 @@
 
 # dependencies
 node_modules/
+# Windows can't fully resolve every platform's optional native deps (e.g. ESLint's
+# wasm32-wasi resolver fallback), which breaks `npm ci` on EAS's Linux build image.
+package-lock.json
 
 # Expo
 .expo/

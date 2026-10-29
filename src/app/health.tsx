@@ -1,23 +1,43 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { openHealthConnectSettings } from 'react-native-health-connect';
 
-import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useHealthConnect } from '@/hooks/use-health-connect';
 import { useTheme } from '@/hooks/use-theme';
 
-export default function TabTwoScreen() {
+function MetricCard({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <ThemedView type="backgroundElement" style={styles.card}>
+      <ThemedText themeColor="textSecondary" type="small">
+        {label}
+      </ThemedText>
+      <ThemedText type="subtitle">{value}</ThemedText>
+      <ThemedText themeColor="textSecondary" type="small">
+        {unit}
+      </ThemedText>
+    </ThemedView>
+  );
+}
+
+export default function HealthScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const insets = {
     ...safeAreaInsets,
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
   };
   const theme = useTheme();
+  const { status, error, summary, requestAccess, refresh } = useHealthConnect();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
 
   const contentPlatformStyle = Platform.select({
     android: {
@@ -36,90 +56,96 @@ export default function TabTwoScreen() {
     <ScrollView
       style={[styles.scrollView, { backgroundColor: theme.background }]}
       contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
+      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
+      refreshControl={
+        status === 'ready' ? (
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        ) : undefined
+      }>
       <ThemedView style={styles.container}>
         <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
+          <ThemedText type="subtitle">Health</ThemedText>
           <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
+            ข้อมูลสุขภาพที่ซิงค์เข้า Health Connect จากแอปสมาร์ทวอทช์ของคุณ{'\n'}
+            (Samsung Health, Fitbit, Garmin, Wear OS และอื่นๆ)
           </ThemedText>
+        </ThemedView>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
+        {status === 'unsupported' && (
+          <ThemedView style={styles.sectionsWrapper}>
+            <ThemedText style={styles.centerText}>
+              {Platform.OS === 'android'
+                ? 'อุปกรณ์นี้ไม่รองรับ Health Connect'
+                : 'Health Connect ใช้ได้เฉพาะ Android เท่านั้น'}
+            </ThemedText>
+          </ThemedView>
+        )}
+
+        {status === 'checking' && (
+          <ThemedView style={styles.sectionsWrapper}>
+            <ThemedText style={styles.centerText}>กำลังตรวจสอบ Health Connect…</ThemedText>
+          </ThemedView>
+        )}
+
+        {status === 'needs-install' && (
+          <ThemedView style={styles.sectionsWrapper}>
+            <ThemedText style={styles.centerText}>
+              ต้องติดตั้งหรืออัปเดตแอป Health Connect ก่อน
+            </ThemedText>
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              onPress={() => openHealthConnectSettings()}>
+              <ThemedText style={styles.buttonText}>เปิด Health Connect</ThemedText>
             </Pressable>
-          </ExternalLink>
-        </ThemedView>
+          </ThemedView>
+        )}
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
+        {status === 'needs-permission' && (
+          <ThemedView style={styles.sectionsWrapper}>
+            <ThemedText style={styles.centerText}>
+              ขออนุญาตอ่านข้อมูลก้าวเดิน, อัตราการเต้นหัวใจ, การนอน และแคลอรี่
             </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              onPress={requestAccess}>
+              <ThemedText style={styles.buttonText}>เชื่อมต่อ Health Connect</ThemedText>
+            </Pressable>
+          </ThemedView>
+        )}
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
-
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
+        {status === 'error' && (
+          <ThemedView style={styles.sectionsWrapper}>
+            <ThemedText style={styles.centerText} themeColor="textSecondary">
+              เกิดข้อผิดพลาด: {error}
             </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              onPress={requestAccess}>
+              <ThemedText style={styles.buttonText}>ลองอีกครั้ง</ThemedText>
+            </Pressable>
+          </ThemedView>
+        )}
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
+        {status === 'ready' && summary && (
+          <ThemedView style={styles.grid}>
+            <MetricCard label="ก้าวเดินวันนี้" value={summary.steps.toLocaleString()} unit="ก้าว" />
+            <MetricCard
+              label="แคลอรี่ที่เผาผลาญ"
+              value={summary.activeCaloriesKcal.toFixed(0)}
+              unit="kcal"
+            />
+            <MetricCard
+              label="อัตราการเต้นหัวใจเฉลี่ย"
+              value={summary.heartRateBpm?.toString() ?? '—'}
+              unit="bpm"
+            />
+            <MetricCard
+              label="การนอน (คืนล่าสุด)"
+              value={Math.round(summary.sleepMinutes / 60).toString()}
+              unit="ชั่วโมง"
+            />
+          </ThemedView>
+        )}
       </ThemedView>
     </ScrollView>
   );
@@ -149,32 +175,34 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
   },
-  linkButton: {
-    flexDirection: 'row',
+  primaryButton: {
+    backgroundColor: '#3c87f7',
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
+    paddingVertical: Spacing.three,
+    borderRadius: Spacing.three,
     alignItems: 'center',
+  },
+  buttonText: {
+    color: '#ffffff',
   },
   sectionsWrapper: {
-    gap: Spacing.five,
+    gap: Spacing.three,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
     alignItems: 'center',
   },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    justifyContent: 'center',
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  card: {
+    width: 150,
+    gap: Spacing.one,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    alignItems: 'center',
   },
 });
